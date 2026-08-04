@@ -5,7 +5,6 @@ import com.dragonminez.common.util.types.items.GenericItemDTO;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -59,9 +58,7 @@ public class GenericItemReward extends QuestReward {
 		return Component.translatable(
 				"gui.dragonminez.quests.rewards.item",
 				shownCount,
-				Component.translatable(
-						"item." + ResourceLocation.parse(itemReward.getItemId()).toLanguageKey()
-				)
+				Component.translatable("item." + itemReward.getItemId().toLanguageKey())
 		);
 	}
 }
