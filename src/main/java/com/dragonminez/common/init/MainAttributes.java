@@ -1,7 +1,6 @@
 package com.dragonminez.common.init;
 
 import com.dragonminez.Reference;
-import com.dragonminez.common.config.ConfigManager;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.RangedAttribute;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -30,15 +29,17 @@ public class MainAttributes {
     public static final DeferredHolder<Attribute, Attribute> CRIT_CHANCE = register("crit_chance", "attribute.dragonminez.critical_chance", 0.05D, 0.0, 1.0D);
     public static final DeferredHolder<Attribute, Attribute> CRIT_DAMAGE = register("crit_damage", "attribute.dragonminez.critical_damage", 1.5D, 1.0D, 100.0D);
 
+    /**
+     * Main stats (STR…ENE): register with a high <em>engine</em> ceiling only.
+     * Actual allowed values come from config {@code gameplay.maxValue} via
+     * {@link com.dragonminez.common.stats.character.Stats} clamp / commands.
+     * {@link com.dragonminez.common.stats.GenericAttributes} raises the attribute
+     * max to match config once config is loaded (registry-time config is usually null).
+     */
     private static DeferredHolder<Attribute, Attribute> registerMainStat(String registryName, String translationKey, double defaultValue) {
-        return register(registryName, translationKey, defaultValue, 0.0, getConfiguredMainStatMax());
-    }
-
-    private static double getConfiguredMainStatMax() {
-        if (ConfigManager.getServerConfig() != null && ConfigManager.getServerConfig().getGameplay() != null) {
-            return ConfigManager.getServerConfig().getGameplay().getMaxValue();
-        }
-        return 10000.0;
+        // Bootstrap max: large enough for any config maxValue (Integer.MAX_VALUE).
+        // Not a balance setting — Stats.clampStatValue enforces config.
+        return register(registryName, translationKey, defaultValue, 0.0, (double) Integer.MAX_VALUE);
     }
 
     private static DeferredHolder<Attribute, Attribute> register(String registryName, String translationKey, double defaultValue, double min, double max) {

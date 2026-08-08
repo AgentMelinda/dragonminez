@@ -18,23 +18,32 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 
 /**
- * Raises vanilla / mod attribute hard caps so DMZ vitality and combat stats can exceed
- * Minecraft's default {@code generic.max_health} ceiling (1024, often 2048 with AttributeFix).
+ * Syncs Minecraft {@link RangedAttribute} hard ceilings so they can hold values the
+ * <b>server config already allows</b>.
  *
- * <p>Other mods (notably AttributeFix) may rewrite the same fields after our load-complete
- * pass, so {@link #ensureAttributeCeilings()} is re-run on server start and whenever health
- * bonuses are applied.
+ * <p><b>Game balance max stats</b> live only in config
+ * ({@code gameplay.maxValue} via {@link ConfigManager}) and in
+ * {@link StatsData#getConfiguredMaxValue()} / {@link com.dragonminez.common.stats.character.Stats}
+ * clamp logic. This class does <b>not</b> invent a second max-stats setting.
+ *
+ * <p>It only:
+ * <ul>
+ *   <li>Mirrors {@code maxValue} onto main-stat attributes (STR…ENE) so bases are not
+ *       sanitized below what config allows (registry-time max may be a bootstrap only)</li>
+ *   <li>Raises engine ceilings on vanilla/derived attributes (HP, max energy, damage, …)
+ *       so formulas that scale with high stats are not clamped by vanilla 1024 HP etc.</li>
+ * </ul>
  */
 @EventBusSubscriber(modid = Reference.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public class GenericAttributes {
 	/**
-	 * Finite ceiling high enough for endgame vitality without using {@link Float#MAX_VALUE}
-	 * (which can break float health sync / AttributeFix configs).
+	 * Technical ceiling for <em>derived</em> / vanilla attributes (not the config max-stat).
+	 * Large enough for endgame pools/damage without using {@link Float#MAX_VALUE}.
 	 */
-	public static final double COMBAT_ATTRIBUTE_MAX = 2_000_000_000.0D;
+	private static final double ENGINE_DERIVED_ATTRIBUTE_CEILING = 2_000_000_000.0D;
 
 	private static volatile boolean gameBusHooked;
-	private static volatile boolean loggedHealthCeiling;
+	private static volatile boolean loggedOnce;
 
 	@SubscribeEvent
 	public static void onLoadComplete(FMLLoadCompleteEvent event) {
@@ -49,56 +58,70 @@ public class GenericAttributes {
 	}
 
 	private static void onServerAboutToStart(ServerAboutToStartEvent event) {
-		// Re-apply after AttributeFix / datapack attribute rewrites during load.
+		// Config is loaded; re-apply so main-stat max tracks gameplay.maxValue.
 		ensureAttributeCeilings();
 	}
 
-	/** Idempotent: safe to call from login, tick, and stat updates. */
+	/**
+	 * Apply config + engine ceilings. Safe to call after config reload and before
+	 * large admin stat writes. Does not replace config — only opens attribute clamps.
+	 */
 	public static void ensureAttributeCeilings() {
-		setMaxIfRanged(Attributes.ARMOR, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(Attributes.ARMOR_TOUGHNESS, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(Attributes.MAX_HEALTH, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(Attributes.ATTACK_DAMAGE, COMBAT_ATTRIBUTE_MAX);
+		// --- Main stats: only what config says ---
+		double configuredMax = readConfiguredMaxValue();
+		if (configuredMax > 0.0) {
+			raiseMaxIfNeeded(MainAttributes.STRENGTH, configuredMax);
+			raiseMaxIfNeeded(MainAttributes.STRIKE_POWER, configuredMax);
+			raiseMaxIfNeeded(MainAttributes.RESISTANCE, configuredMax);
+			raiseMaxIfNeeded(MainAttributes.VITALITY, configuredMax);
+			raiseMaxIfNeeded(MainAttributes.KI_POWER, configuredMax);
+			raiseMaxIfNeeded(MainAttributes.ENERGY, configuredMax);
+		}
 
-		// Main combat stats: registry-time max is often 10000 (config not loaded yet).
-		// Raise to configured maxValue (can be 1e9). Also beat AttributeFix-style 99999 caps.
-		double mainStatMax = Math.max(10_000.0, getConfiguredMainStatMax());
-		setMaxIfRanged(MainAttributes.STRENGTH, mainStatMax);
-		setMaxIfRanged(MainAttributes.STRIKE_POWER, mainStatMax);
-		setMaxIfRanged(MainAttributes.RESISTANCE, mainStatMax);
-		setMaxIfRanged(MainAttributes.VITALITY, mainStatMax);
-		setMaxIfRanged(MainAttributes.KI_POWER, mainStatMax);
-		setMaxIfRanged(MainAttributes.ENERGY, mainStatMax);
+		// --- Derived / vanilla: engine room only (not gameplay maxValue) ---
+		raiseMaxIfNeeded(Attributes.ARMOR, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(Attributes.ARMOR_TOUGHNESS, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(Attributes.MAX_HEALTH, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(Attributes.ATTACK_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
 
-		setMaxIfRanged(MainAttributes.MAX_ENERGY, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.MAX_STAMINA, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.MAX_POISE, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.MELEE_DAMAGE, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.STRIKE_DAMAGE, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.KI_DAMAGE, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(MainAttributes.DEFENSE, COMBAT_ATTRIBUTE_MAX);
+		raiseMaxIfNeeded(MainAttributes.MAX_ENERGY, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.MAX_STAMINA, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.MAX_POISE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.MELEE_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.STRIKE_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.KI_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(MainAttributes.DEFENSE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
 
-		setMaxIfRanged(EntityAttributes.KI_BLAST_DAMAGE, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(EntityAttributes.FLY_SPEED, COMBAT_ATTRIBUTE_MAX);
-		setMaxIfRanged(EntityAttributes.KI_BLAST_SPEED, COMBAT_ATTRIBUTE_MAX);
+		raiseMaxIfNeeded(EntityAttributes.KI_BLAST_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(EntityAttributes.FLY_SPEED, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		raiseMaxIfNeeded(EntityAttributes.KI_BLAST_SPEED, ENGINE_DERIVED_ATTRIBUTE_CEILING);
 
-		if (!loggedHealthCeiling && Attributes.MAX_HEALTH.value() instanceof RangedAttribute health) {
-			loggedHealthCeiling = true;
-			LogUtil.info(Env.COMMON, "MAX_HEALTH attribute ceiling is now {}", health.getMaxValue());
+		if (!loggedOnce) {
+			loggedOnce = true;
+			double mainMax = MainAttributes.VITALITY.value() instanceof RangedAttribute ra
+					? ra.getMaxValue() : -1;
+			double hpMax = Attributes.MAX_HEALTH.value() instanceof RangedAttribute ra
+					? ra.getMaxValue() : -1;
+			LogUtil.info(Env.COMMON,
+					"Attribute ceilings synced: config maxValue={} mainStatAttrMax={} maxHealthAttrMax={}",
+					configuredMax > 0 ? configuredMax : "(config not ready)",
+					mainMax, hpMax);
 		}
 	}
 
-	private static double getConfiguredMainStatMax() {
-		if (ConfigManager.getServerConfig() != null && ConfigManager.getServerConfig().getGameplay() != null) {
+	/** Same source of truth as {@link StatsData#getConfiguredMaxValue()} when config is live. */
+	private static double readConfiguredMaxValue() {
+		if (ConfigManager.getServerConfig() != null
+				&& ConfigManager.getServerConfig().getGameplay() != null) {
 			return Math.max(1.0, ConfigManager.getServerConfig().getGameplay().getMaxValue());
 		}
-		return 10000.0;
+		return -1.0; // not ready — skip main-stat sync this call
 	}
 
-	private static void setMaxIfRanged(Holder<Attribute> attribute, double maxValue) {
-		if (attribute == null || attribute.value() == null) return;
+	private static void raiseMaxIfNeeded(Holder<Attribute> attribute, double maxValue) {
+		if (attribute == null || attribute.value() == null || maxValue <= 0.0) return;
 		if (!(attribute.value() instanceof RangedAttribute rangedAttribute)) return;
-		// Only raise — never shrink another mod's higher ceiling.
+		// Only raise — never shrink (config lower still enforced by Stats.clampStatValue).
 		if (rangedAttribute.getMaxValue() >= maxValue) return;
 		((RangedAttributeMixin) (Object) rangedAttribute).setMaxValue(maxValue);
 	}
