@@ -39,8 +39,17 @@ public class GenericAttributes {
 	/**
 	 * Technical ceiling for <em>derived</em> / vanilla attributes (not the config max-stat).
 	 * Large enough for endgame pools/damage without using {@link Float#MAX_VALUE}.
+	 * Not used for living max_health — see {@link #MAX_HEALTH_ENGINE_CEILING}.
 	 */
 	private static final double ENGINE_DERIVED_ATTRIBUTE_CEILING = 2_000_000_000.0D;
+
+	/**
+	 * Living max_health only. 1.20.1 (vanilla 1024 / AttributeFix ~2048) kept this low enough
+	 * that multiplayer join worked. Raising it to 2e9 with VIT=999999999 freezes rejoin after
+	 * terrain. 2^20 is well above AttributeFix defaults and safe for entity HP sync.
+	 * Main stats STR…ENE still use full config {@code maxValue} (can be 1e9).
+	 */
+	public static final double MAX_HEALTH_ENGINE_CEILING = 1_048_576.0D;
 
 	private static volatile boolean gameBusHooked;
 	private static volatile boolean loggedOnce;
@@ -81,7 +90,8 @@ public class GenericAttributes {
 		// --- Derived / vanilla: engine room only (not gameplay maxValue) ---
 		raiseMaxIfNeeded(Attributes.ARMOR, ENGINE_DERIVED_ATTRIBUTE_CEILING);
 		raiseMaxIfNeeded(Attributes.ARMOR_TOUGHNESS, ENGINE_DERIVED_ATTRIBUTE_CEILING);
-		raiseMaxIfNeeded(Attributes.MAX_HEALTH, ENGINE_DERIVED_ATTRIBUTE_CEILING);
+		// Not ENGINE_DERIVED_ATTRIBUTE_CEILING — full 2e9 living HP wedges rejoin; see MAX_HEALTH_ENGINE_CEILING.
+		raiseMaxIfNeeded(Attributes.MAX_HEALTH, MAX_HEALTH_ENGINE_CEILING);
 		raiseMaxIfNeeded(Attributes.ATTACK_DAMAGE, ENGINE_DERIVED_ATTRIBUTE_CEILING);
 
 		raiseMaxIfNeeded(MainAttributes.MAX_ENERGY, ENGINE_DERIVED_ATTRIBUTE_CEILING);
