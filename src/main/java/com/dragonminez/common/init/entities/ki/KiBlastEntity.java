@@ -613,8 +613,8 @@ public class KiBlastEntity extends AbstractKiProjectile {
                 this.setDeltaMovement(0, 0, 0);
             } else {
                 if (this.getOwner() instanceof LivingEntity owner) {
-                    Vec3 look = owner.getLookAngle();
-                    this.shootFromRotation(owner, owner.getXRot(), owner.getYRot(), 0.0F, this.getKiSpeed(), 0.0F);
+                    Vec3 look = CameraAimHelper.resolve(owner);
+                    this.shootFromRotation(owner, CameraAimHelper.pitch(look), CameraAimHelper.yaw(look), 0.0F, this.getKiSpeed(), 0.0F);
                 }
             }
             //this.level().playSound(null, this.getX(), this.getY(), this.getZ(), MainSounds.KIBLAST_ATTACK.get(), SoundSource.PLAYERS, 0.5F, 2.0F);
@@ -851,7 +851,7 @@ public class KiBlastEntity extends AbstractKiProjectile {
 
         if (!isCasting && this.isParked() && ownerEntity instanceof LivingEntity owner) {
             Vec3 eyePos = owner.getEyePosition();
-            Vec3 look = owner.getLookAngle();
+            Vec3 look = CameraAimHelper.resolve(owner);
 
             Vec3 targetPos = eyePos.add(look.scale(this.getParkedDistance()));
             Vec3 diff = targetPos.subtract(this.position());
@@ -864,8 +864,8 @@ public class KiBlastEntity extends AbstractKiProjectile {
                 this.setPos(targetPos.x, targetPos.y, targetPos.z);
             }
 
-            this.setYRot(owner.getYRot());
-            this.setXRot(owner.getXRot());
+            this.setYRot(CameraAimHelper.yaw(look));
+            this.setXRot(CameraAimHelper.pitch(look));
         }
 
         if (!this.level().isClientSide) {
@@ -1010,9 +1010,12 @@ public class KiBlastEntity extends AbstractKiProjectile {
 
 
     private void updatePositionRelativeToOwner(LivingEntity owner) {
-        Vec3 look = owner.getLookAngle();
+        Vec3 look = CameraAimHelper.resolve(owner);
         Vec3 worldUp = new Vec3(0, 1, 0);
         Vec3 right = look.cross(worldUp).normalize();
+        if (right.lengthSqr() < 1.0E-6D) {
+            right = new Vec3(1, 0, 0);
+        }
 
         // Usar worldUp directamente en vez de right.cross(look)
         Vec3 offset = right.scale(this.entityData.get(OFFSET_X))
@@ -1026,8 +1029,8 @@ public class KiBlastEntity extends AbstractKiProjectile {
         Vec3 newPos = new Vec3(centerX, centerY, centerZ).add(offset);
         this.setPos(newPos.x, newPos.y, newPos.z);
 
-        this.setYRot(owner.getYRot());
-        this.setXRot(owner.getXRot());
+        this.setYRot(CameraAimHelper.yaw(look));
+        this.setXRot(CameraAimHelper.pitch(look));
     }
 
     private void pulseAreaDamage() {

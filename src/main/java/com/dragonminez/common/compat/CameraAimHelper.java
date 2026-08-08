@@ -23,9 +23,12 @@ public final class CameraAimHelper {
 		tag.putLong(AIM_TIME, entity.level().getGameTime());
 	}
 
+	/** How long a stored camera aim stays valid (ticks). Refreshed often while charging. */
+	private static final long AIM_FRESH_TICKS = 80L;
+
 	public static Vec3 resolve(LivingEntity entity) {
 		var tag = entity.getPersistentData();
-		if (entity.level().getGameTime() - tag.getLong(AIM_TIME) <= 40L) {
+		if (entity.level().getGameTime() - tag.getLong(AIM_TIME) <= AIM_FRESH_TICKS) {
 			Vec3 aim = new Vec3(tag.getDouble(AIM_X), tag.getDouble(AIM_Y), tag.getDouble(AIM_Z));
 			if (isValid(aim)) return aim.normalize();
 		}

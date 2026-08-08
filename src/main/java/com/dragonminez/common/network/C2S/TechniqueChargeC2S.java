@@ -17,7 +17,7 @@ import com.dragonminez.compat.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public class TechniqueChargeC2S {
-	public enum Action { START, SET_HOLDING }
+	public enum Action { START, SET_HOLDING, UPDATE_AIM }
 
 	private final Action action;
 	private final int slot;
@@ -43,6 +43,11 @@ public class TechniqueChargeC2S {
 
 	public static TechniqueChargeC2S setHolding(boolean holding, Vec3 aim) {
 		return new TechniqueChargeC2S(Action.SET_HOLDING, -1, holding, -1, aim);
+	}
+
+	/** Lightweight aim refresh while holding a charge (no progression resync). */
+	public static TechniqueChargeC2S updateAim(Vec3 aim) {
+		return new TechniqueChargeC2S(Action.UPDATE_AIM, -1, false, -1, aim);
 	}
 
 	public TechniqueChargeC2S(FriendlyByteBuf buf) {
@@ -117,7 +122,9 @@ public class TechniqueChargeC2S {
 					}
 				}
 
-				NetworkHandler.sendToTrackingEntityAndSelf(new ProgressionSyncS2C(player), player);
+				if (msg.action != Action.UPDATE_AIM) {
+					NetworkHandler.sendToTrackingEntityAndSelf(new ProgressionSyncS2C(player), player);
+				}
 			});
 		});
 

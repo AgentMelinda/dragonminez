@@ -453,6 +453,13 @@ public class ClientStatsEvents {
 		}
 
 		boolean slotDown = activeChargeSlot < TECHNIQUE_VISIBLE_SLOTS && downNow[activeChargeSlot];
+		if (slotDown && sessionActive && !chargeReleaseSent) {
+			// Keep server camera aim fresh while holding — otherwise after ~2s it falls back
+			// to body look and charging orbs/beams track the torso instead of the crosshair.
+			if (player.tickCount % 2 == 0) {
+				NetworkHandler.sendToServer(TechniqueChargeC2S.updateAim(getCameraAim()));
+			}
+		}
 		if (!slotDown && !chargeReleaseSent) {
 			NetworkHandler.sendToServer(TechniqueChargeC2S.setHolding(false, getCameraAim()));
 			chargeReleaseSent = true;

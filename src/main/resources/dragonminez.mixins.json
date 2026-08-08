@@ -13,7 +13,7 @@
     "common.PlayerListMixin",
     "common.PlayerMixin",
     "common.RangedAttributeMixin",
-    "common.StructureTemplatePoolAccessor",
+    "common.StructureTemplatePoolAccessor"
   ],
   "client": [
     "client.BundleTooltipComponentAccessor",
