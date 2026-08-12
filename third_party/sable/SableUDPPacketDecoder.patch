@@ -1,0 +1,12 @@
+--- a/common/src/main/java/dev/ryanhcode/sable/network/udp/SableUDPPacketDecoder.java
++++ b/common/src/main/java/dev/ryanhcode/sable/network/udp/SableUDPPacketDecoder.java
+@@ -33,8 +33,12 @@ public class SableUDPPacketDecoder extends MessageToMessageDecoder<DatagramPacke
+         if (i != 0) {
+             final short packetID = byteBuf.readUnsignedByte();
+ 
+             if (packetID >= SableUDPPacketType.VALUES.length) {
+-                throw new IOException("Received an invalid packet ID: " + packetID);
++                // Foreign UDP (e.g. legacy MC query 0xFE / 254) on the same port.
++                // Drop silently — throwing tears down the channel and spams logs.
++                return;
+             }

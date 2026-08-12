@@ -1,6 +1,6 @@
 package com.dragonminez.common.network.S2C;
 
-import com.dragonminez.client.gui.character.SkillsMenuScreen;
+import com.dragonminez.common.network.ClientPacketHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.api.distmarker.Dist;
 import com.dragonminez.compat.DistExecutor;
@@ -34,7 +34,8 @@ public class TechniqueImportResultS2C {
 	}
 
 	public void handle(Supplier<NetworkEvent.Context> ctx) {
-		ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> SkillsMenuScreen.handleTechniqueImportResult(status, value)));
+		ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+				() -> () -> ClientPacketHandler.handleTechniqueImportResult(status, value)));
 		ctx.get().setPacketHandled(true);
 	}
 }

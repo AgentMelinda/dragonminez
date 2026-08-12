@@ -52,9 +52,7 @@ public class StatsProvider implements ICapabilityProvider, INBTSerializable<Comp
 		if (cap != StatsCapability.INSTANCE) {
 			return LazyOptional.empty();
 		}
-		@SuppressWarnings("unchecked")
-		LazyOptional<T> result = (LazyOptional<T>) LazyOptional.of(() -> getOrCreate(player).data);
-		return result;
+		return getOrCreate(player).getCapability(cap, null);
     }
 
     void invalidate() {

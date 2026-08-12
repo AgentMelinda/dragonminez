@@ -1,15 +1,20 @@
 package com.dragonminez.common.compat;
 
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.Mth;
 
-/** Server-side storage for the client's actual render-camera direction (Aero Cam Sync compatible). */
+import java.util.HashSet;
+import java.util.Set;
+
+/** Side-local storage for the actual render-camera direction (Aero Cam Sync compatible). */
 public final class CameraAimHelper {
 	private static final String AIM_X = "dmz_camera_aim_x";
 	private static final String AIM_Y = "dmz_camera_aim_y";
 	private static final String AIM_Z = "dmz_camera_aim_z";
 	private static final String AIM_TIME = "dmz_camera_aim_time";
+	private static final Set<Integer> LOCAL_SOKIDANS = new HashSet<>();
 
 	private CameraAimHelper() {}
 
@@ -23,9 +28,16 @@ public final class CameraAimHelper {
 		tag.putLong(AIM_TIME, entity.level().getGameTime());
 	}
 
-	/** How long a stored camera aim stays valid (ticks). Refreshed often while charging. */
+	/** How long a stored camera aim stays valid (ticks). Refreshed while charging or steering. */
 	private static final long AIM_FRESH_TICKS = 80L;
 
+	/**
+	 * The entity's stored camera aim, falling back to its look angle.
+	 *
+	 * <p>The tag itself is not synchronized. Shared prediction may use this only when its control
+	 * path explicitly refreshes both copies, as Sokidan steering does. Other shared tick paths must
+	 * use entity rotation; one-shot server launch decisions may always use this helper.
+	 */
 	public static Vec3 resolve(LivingEntity entity) {
 		var tag = entity.getPersistentData();
 		if (entity.level().getGameTime() - tag.getLong(AIM_TIME) <= AIM_FRESH_TICKS) {
@@ -34,6 +46,20 @@ public final class CameraAimHelper {
 		}
 		return entity.getLookAngle().normalize();
 	}
+
+	public static void trackLocalSokidan(int entityId, boolean controlled) {
+		if (controlled) LOCAL_SOKIDANS.add(entityId); else LOCAL_SOKIDANS.remove(entityId);
+	}
+
+	public static boolean hasLocalSokidan(Level level) {
+		LOCAL_SOKIDANS.removeIf(id -> {
+			var entity = level.getEntity(id);
+			return entity == null || entity.isRemoved();
+		});
+		return !LOCAL_SOKIDANS.isEmpty();
+	}
+
+	public static void clearLocalSokidans() { LOCAL_SOKIDANS.clear(); }
 
 	public static float yaw(Vec3 direction) {
 		return (float) (Mth.atan2(direction.z, direction.x) * (180.0D / Math.PI) - 90.0D);

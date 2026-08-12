@@ -1,6 +1,7 @@
 import java.net.URI
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import groovy.json.JsonSlurper
 
 plugins {
     java
@@ -77,6 +78,7 @@ val clientRunRequested = requestedTasks.any { it.contains("runclient") }
 val includeClientOnlyDevMods = providers.gradleProperty("includeClientOnlyDevMods")
     .map { it.toBoolean() }
     .orElse(clientRunRequested)
+val serverGameDirectory = providers.gradleProperty("serverGameDirectory").orElse("run")
 
 neoForge {
     version = neoVersion
@@ -95,7 +97,7 @@ neoForge {
         }
         register("server") {
             server()
-            gameDirectory = file("run")
+            gameDirectory = file(serverGameDirectory.get())
             programArgument("--nogui")
             systemProperty("neoforge.enabledGameTestNamespaces", modId)
             systemProperty("geckolib.disable_examples", "true")
@@ -125,6 +127,11 @@ neoForge {
         register(modId) {
             sourceSet(sourceSets.main.get())
         }
+    }
+
+    unitTest {
+        testedMod = mods[modId]
+        enable()
     }
 }
 
@@ -188,6 +195,7 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("top.theillusivec4.curios:curios-neoforge:$curiosVersion:api")
 
     // JEI API only (optional compile). Full JEI for client runs is optional localRuntime.
     compileOnly("mezz.jei:jei-$minecraftVersion-common-api:$jeiVersion")
@@ -202,6 +210,35 @@ sourceSets.main {
     resources.srcDir("src/generated/resources/")
 }
 
+fun validateJsonFiles(files: Collection<File>, label: String) {
+    val failures = mutableListOf<String>()
+    files.asSequence()
+        .filter { it.isFile && it.extension.equals("json", ignoreCase = true) }
+        .sortedBy { it.invariantSeparatorsPath }
+        .forEach { file ->
+            try {
+                JsonSlurper().parse(file)
+            } catch (exception: Exception) {
+                failures += "${file.relativeTo(projectDir).invariantSeparatorsPath}: ${exception.message}"
+            }
+        }
+    if (failures.isNotEmpty()) {
+        throw GradleException("Malformed JSON in $label:\n" + failures.joinToString("\n"))
+    }
+}
+
+val sourceJsonFiles = files(
+    fileTree("src/main/resources") { include("**/*.json") },
+    fileTree("src/generated/resources") { include("**/*.json") }
+)
+
+val validateJsonResources by tasks.registering {
+    group = "verification"
+    description = "Parses every JSON file in the source and generated resource roots."
+    inputs.files(sourceJsonFiles)
+    doLast { validateJsonFiles(sourceJsonFiles.files, "resource source roots") }
+}
+
 val generatedResourcesDir = layout.projectDirectory.dir("src/generated/resources")
 val copyGeneratedResourcesToOutput by tasks.registering(Copy::class) {
     // Datagen runs before release packaging so clean checkouts do not silently
@@ -210,6 +247,7 @@ val copyGeneratedResourcesToOutput by tasks.registering(Copy::class) {
         exclude(".cache/**")
     }
     into(layout.buildDirectory.dir("resources/main"))
+    includeEmptyDirs = false
     onlyIf { generatedResourcesDir.asFile.exists() }
 }
 val generateReleaseData = tasks.named("runData")
@@ -217,8 +255,28 @@ copyGeneratedResourcesToOutput.configure {
     mustRunAfter(generateReleaseData)
 }
 
+val validateGeneratedJsonAfterData by tasks.registering {
+    group = "verification"
+    description = "Parses generated JSON after runData completes."
+    dependsOn(generateReleaseData)
+    mustRunAfter(generateReleaseData)
+    val generatedJson = fileTree(generatedResourcesDir) { include("**/*.json") }
+    inputs.files(generatedJson)
+    doLast { validateJsonFiles(generatedJson.files, "post-datagen resources") }
+}
+
+val validateProcessedJson by tasks.registering {
+    group = "verification"
+    description = "Parses every processed JSON resource immediately before packaging."
+    dependsOn("processResources", copyGeneratedResourcesToOutput)
+    mustRunAfter(copyGeneratedResourcesToOutput)
+    val processedJson = fileTree(layout.buildDirectory.dir("resources/main")) { include("**/*.json") }
+    inputs.files(processedJson)
+    doLast { validateJsonFiles(processedJson.files, "processed resources") }
+}
+
 tasks.named<Jar>("jar").configure {
-    dependsOn(generateReleaseData, copyGeneratedResourcesToOutput)
+    dependsOn(generateReleaseData, copyGeneratedResourcesToOutput, validateGeneratedJsonAfterData, validateProcessedJson)
     archiveClassifier.set("")
 }
 
@@ -246,8 +304,10 @@ val terrablenderVersionRange = requiredProp("terrablender_version_range")
 val curiosVersionRange = requiredProp("curios_version_range")
 
 tasks.named<ProcessResources>("processResources").configure {
+    dependsOn(validateJsonResources)
     filteringCharset = "UTF-8"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    includeEmptyDirs = false
 
     val replaceProperties = mapOf(
         "minecraft_version" to minecraftVersion,
@@ -276,15 +336,15 @@ tasks.named<ProcessResources>("processResources").configure {
 
 // ============================================================================
 // Resource optimization via PackSquash (https://github.com/ComunidadAylas/PackSquash)
-// Opt-in: CI by default; locally off. Force with -PoptimizeResources=true|false.
+// Enabled by default for release-sized artifacts. Override with
+// -PoptimizeResources=false only when iterating on raw resource output.
 // ============================================================================
 val packSquashVersion = "v0.4.1"
 
 val optimizeResourcesEnabled: Provider<Boolean> =
     providers.gradleProperty("optimizeResources")
         .map { it.toBoolean() }
-        .orElse(providers.environmentVariable("CI").map { it.equals("true", ignoreCase = true) || it == "1" })
-        .orElse(false)
+        .orElse(true)
 
 /** Escapes a path into a TOML basic string. */
 fun tomlString(value: String): String =
@@ -429,7 +489,7 @@ tasks.withType<Jar>().configureEach {
             "Implementation-Title" to project.name,
             "Implementation-Version" to project.version.toString(),
             "Implementation-Vendor" to modAuthors,
-            "MixinConfigs" to "dragonminez.mixins.json"
+            "MixinConfigs" to "dragonminez.mixins.json,dragonminez.sable.mixins.json"
         )
 
         if (includeTimestamp.get()) {

@@ -111,10 +111,11 @@ public class DMZPlayerRenderer<T extends AbstractClientPlayer & GeoAnimatable> e
 
 		poseStack.pushPose();
 
-		boolean shaderPack = IrisCompat.isShaderPackInUse();
+		boolean hudPortrait = EntityPreviewRenderContext.isHudPortrait();
+		boolean shaderPack = !hudPortrait && IrisCompat.isShaderPackInUse();
 		boolean captureMask = !shaderPack || TransformationPostShaderManager.isShaderpackMainPass();
 
-		TransformationPostShaderManager.MaskData maskData = captureMask ? TransformationPostShaderManager.getEntityMaskData(entity) : null;
+		TransformationPostShaderManager.MaskData maskData = !hudPortrait && captureMask ? TransformationPostShaderManager.getEntityMaskData(entity) : null;
 		TransformationMaskBufferSource maskBufferSource = null;
 		if (maskData != null) {
 			maskBufferSource = TransformationPostShaderManager.getMaskBufferSource();
@@ -128,7 +129,7 @@ public class DMZPlayerRenderer<T extends AbstractClientPlayer & GeoAnimatable> e
 			);
 		}
 
-		if (FlySkillEvent.getInstance().isFlyingFast(entity)) {
+		if (!hudPortrait && FlySkillEvent.getInstance().isFlyingFast(entity)) {
 			float roll = entity == Minecraft.getInstance().player ? FlightRollHandler.getRoll(partialTick) : 0f;
 			float pitch = entity.getViewXRot(partialTick);
 			float pivotY = entity.getBbHeight() / 2f;
@@ -142,7 +143,7 @@ public class DMZPlayerRenderer<T extends AbstractClientPlayer & GeoAnimatable> e
 
 		poseStack.scale(scalingX, scalingY, scalingZ);
 
-		boolean isAuraActive = stats.getStatus().isAuraActive() || stats.getStatus().isPermanentAura();
+		boolean isAuraActive = !hudPortrait && (stats.getStatus().isAuraActive() || stats.getStatus().isPermanentAura());
 
 		if (isAuraActive) {
 			if (bufferSource instanceof MultiBufferSource.BufferSource bs) bs.endBatch();
@@ -177,6 +178,12 @@ public class DMZPlayerRenderer<T extends AbstractClientPlayer & GeoAnimatable> e
 	@Override
 	public void applyRenderLayers(PoseStack poseStack, T animatable, BakedGeoModel model, RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer, float partialTick, int packedLight, int packedOverlay) {
 		for (GeoRenderLayer<T> renderLayer : getRenderLayers()) {
+			if (EntityPreviewRenderContext.isHudPortrait()
+					&& !(renderLayer instanceof DMZPlayerArmorLayer
+					|| renderLayer instanceof DMZCustomArmorLayer
+					|| renderLayer instanceof DMZRacePartsLayer
+					|| renderLayer instanceof DMZSkinLayer
+					|| renderLayer instanceof DMZHairLayer)) continue;
 			renderLayer.render(poseStack, animatable, model, renderType, bufferSource, buffer, partialTick, packedLight, packedOverlay);
 		}
 	}

@@ -293,7 +293,7 @@ public class KiLaserEntity extends AbstractKiProjectile{
     public void tick() {
         this.baseTick();
 
-        if (!this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
+        if (!this.level().isClientSide && !this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
             this.fireHability(this.getMaxLife() - this.tickCount);
         }
 

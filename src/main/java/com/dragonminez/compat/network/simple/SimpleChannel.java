@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -33,13 +34,38 @@ public final class SimpleChannel {
 	private static final List<SimpleChannel> CHANNELS = new ArrayList<>();
 
 	private final ResourceLocation name;
+	private final String protocolVersion;
+	private final Predicate<String> clientAcceptedVersions;
+	private final Predicate<String> serverAcceptedVersions;
 	private final List<PendingRegistration<?>> pending = new ArrayList<>();
 	private final Map<Class<?>, PayloadBinding<?>> bindings = new ConcurrentHashMap<>();
 	private boolean registered;
 
-	public SimpleChannel(ResourceLocation name) {
+	public SimpleChannel(ResourceLocation name, Supplier<String> protocolVersion,
+			Predicate<String> clientAcceptedVersions, Predicate<String> serverAcceptedVersions) {
 		this.name = name;
+		this.protocolVersion = protocolVersion.get();
+		this.clientAcceptedVersions = clientAcceptedVersions;
+		this.serverAcceptedVersions = serverAcceptedVersions;
+		if (this.protocolVersion == null || this.protocolVersion.isBlank()) {
+			throw new IllegalArgumentException("Network protocol version for '" + name + "' must not be blank");
+		}
+		if (!acceptsClientVersion(this.protocolVersion) || !acceptsServerVersion(this.protocolVersion)) {
+			throw new IllegalArgumentException("Network protocol predicates for '" + name + "' reject its local version '" + this.protocolVersion + "'");
+		}
 		CHANNELS.add(this);
+	}
+
+	public String protocolVersion() {
+		return protocolVersion;
+	}
+
+	public boolean acceptsClientVersion(String version) {
+		return clientAcceptedVersions.test(version);
+	}
+
+	public boolean acceptsServerVersion(String version) {
+		return serverAcceptedVersions.test(version);
 	}
 
 	public <MSG> MessageBuilder<MSG> messageBuilder(Class<MSG> type, int id, NetworkDirection direction) {
@@ -93,11 +119,8 @@ public final class SimpleChannel {
 
 	@SubscribeEvent
 	public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-		// optional(): tolerate version skew / partial channel presence on servers without hard disconnects.
-		// Large config/quest S2C payloads are already compressed in packet classes.
-		PayloadRegistrar registrar = event.registrar("1").optional();
 		for (SimpleChannel channel : List.copyOf(CHANNELS)) {
-			channel.flush(registrar);
+			channel.flush(event.registrar(channel.protocolVersion));
 		}
 	}
 

@@ -124,7 +124,7 @@ public class KiDiskEntity extends AbstractKiProjectile {
 
     @Override
     public void tick() {
-        if (!this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
+        if (!this.level().isClientSide && !this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
             this.fireHability(this.getMaxLife() - this.tickCount);
         }
 

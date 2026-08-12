@@ -12,6 +12,7 @@ import com.dragonminez.compat.network.simple.SimpleChannel;
 
 public class NetworkHandler {
 
+	public static final String PROTOCOL_VERSION = "1.0";
 	public static SimpleChannel INSTANCE;
 	private static int packetId = 0;
 
@@ -22,9 +23,9 @@ public class NetworkHandler {
 	public static void register() {
 		SimpleChannel net = NetworkRegistry.ChannelBuilder
 				.named(ResourceLocation.fromNamespaceAndPath(Reference.MOD_ID, "network"))
-				.networkProtocolVersion(() -> "1.0")
-				.clientAcceptedVersions(s -> true)
-				.serverAcceptedVersions(s -> true)
+				.networkProtocolVersion(() -> PROTOCOL_VERSION)
+				.clientAcceptedVersions(PROTOCOL_VERSION::equals)
+				.serverAcceptedVersions(PROTOCOL_VERSION::equals)
 				.simpleChannel();
 
 		INSTANCE = net;

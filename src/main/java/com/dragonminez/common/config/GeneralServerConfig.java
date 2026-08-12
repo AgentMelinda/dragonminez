@@ -130,7 +130,7 @@ public class GeneralServerConfig {
 		private Boolean gravityBonusEnabled = true;
 		private Double HTCTpMultiplier = 1.75;
 		private Boolean maxLevelValueInsteadOfStats = true;
-		private Integer maxValue = 10000;
+		private Long maxValue = 10000L;
 		private CapsulesConfig capsules = new CapsulesConfig();
 		private Boolean storyModeEnabled = true;
 		private Boolean createDefaultSagas = true;
@@ -241,7 +241,7 @@ public class GeneralServerConfig {
 		}
 
 		public Integer getMaxValue() {
-			return Math.max(1000, Math.min(maxValue, Integer.MAX_VALUE));
+			return (int) Math.max(1000L, Math.min(maxValue != null ? maxValue : 10000L, Integer.MAX_VALUE));
 		}
 
 		public Boolean getMaxLevelValueInsteadOfStats() {

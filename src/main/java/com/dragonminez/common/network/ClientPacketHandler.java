@@ -10,7 +10,14 @@ import com.dragonminez.client.gui.quest.QuestNPCDialogueScreen;
 import com.dragonminez.client.gui.quest.StoryNotificationManager;
 import com.dragonminez.client.gui.quest.StoryToast;
 import com.dragonminez.client.clash.ClientBeamClashState;
+import com.dragonminez.client.gui.character.SkillsMenuScreen;
+import com.dragonminez.client.render.shader.ClientGravityState;
+import com.dragonminez.client.systems.impactframes.ImpactFrame;
+import com.dragonminez.client.systems.impactframes.ImpactFramesHandler;
+import com.dragonminez.client.systems.taiyoken.TaiyokenBlindState;
+import com.dragonminez.common.config.ConfigManager;
 import com.dragonminez.common.network.S2C.BeamClashStateS2C;
+import com.dragonminez.common.network.S2C.TechniqueImportResultS2C;
 import com.dragonminez.common.network.S2C.StoryToastS2C;
 import com.dragonminez.common.network.S2C.TriggerAnimationS2C;
 import com.dragonminez.common.stats.StatsCapability;
@@ -220,6 +227,27 @@ public class ClientPacketHandler {
 		Entity entity = clientLevel.getEntity(entityId);
 		if (entity instanceof AbstractClientPlayer clientPlayer && clientPlayer instanceof IPlayerAnimatable animatable) {
 			animatable.dragonminez$playMeleeAnimation(animationName, isOffhand, speedMultiplier);
+		}
+	}
+
+	public static void handleGravityZoneSync(float machineGravity, float environmentalGravity, float netGravity,
+			float statMult, float tpGravityMult, int idealWeight, int totalWeight, int effectiveWeight,
+			float loadRatio, float weightTpMult, int zone) {
+		ClientGravityState.update(machineGravity, environmentalGravity, netGravity, statMult, tpGravityMult,
+				idealWeight, totalWeight, effectiveWeight, loadRatio, weightTpMult, zone);
+	}
+
+	public static void handleTaiyokenBlind(int durationTicks) {
+		TaiyokenBlindState.startBlind(durationTicks);
+	}
+
+	public static void handleTechniqueImportResult(TechniqueImportResultS2C.Status status, int value) {
+		SkillsMenuScreen.handleTechniqueImportResult(status, value);
+	}
+
+	public static void handleImpactFrame(float threshold, float lerp, int duration, boolean invert) {
+		if (ConfigManager.getUserConfig().isImpactFramesEnabled()) {
+			ImpactFramesHandler.addImpactFrame(new ImpactFrame(threshold, lerp, duration, invert));
 		}
 	}
 

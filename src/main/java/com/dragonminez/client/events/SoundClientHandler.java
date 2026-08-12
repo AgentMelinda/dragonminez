@@ -44,8 +44,7 @@ public class SoundClientHandler {
             updatePlayerAuraSound(player, mc);
         }
 
-        ACTIVE_AURA_SOUNDS.entrySet().removeIf(entry ->
-                entry.getValue().isStopped() || !mc.getSoundManager().isActive(entry.getValue()));
+        ACTIVE_AURA_SOUNDS.values().removeIf(AuraLoopSound::isStopped);
 
         if (mc.level.getGameTime() % 200 == 0) { // Cada 10 segundos
             LIGHTNING_TIMERS.keySet().removeIf(uuid -> mc.level.getPlayerByUUID(uuid) == null);
@@ -65,8 +64,9 @@ public class SoundClientHandler {
         boolean hasAura = stats.getStatus().isAuraActive() || stats.getStatus().isPermanentAura();
 
         AuraLoopSound existing = ACTIVE_AURA_SOUNDS.get(playerId);
-        boolean isPlaying = existing != null && !existing.isStopped()
-                && mc.getSoundManager().isActive(existing);
+        // SoundManager queues new instances before isActive() becomes true. Treating that short
+        // window as "not playing" allocated another loop every tick until the sound pool filled.
+        boolean isPlaying = existing != null && !existing.isStopped();
 
         if (hasAura) {
             if (!isPlaying) {

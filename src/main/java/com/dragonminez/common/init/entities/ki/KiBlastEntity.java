@@ -718,7 +718,11 @@ public class KiBlastEntity extends AbstractKiProjectile {
 
     @Override
     public void tick() {
-        if (!this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
+        if (this.level().isClientSide && this.isControllable()
+                && this.getOwner() instanceof Player player && player.isLocalPlayer()) {
+            CameraAimHelper.trackLocalSokidan(this.getId(), this.isActivelyControlledSokidan());
+        }
+        if (!this.level().isClientSide && !this.isFiring() && this.getMaxLife() != 99999 && this.tickCount >= this.getCastTime()) {
             this.fireHability(this.getMaxLife() - this.tickCount);
         }
 
@@ -849,8 +853,9 @@ public class KiBlastEntity extends AbstractKiProjectile {
             return;
         }
 
-        if (!isCasting && this.isParked() && ownerEntity instanceof LivingEntity owner) {
+        if (this.isActivelyControlledSokidan() && ownerEntity instanceof LivingEntity owner) {
             Vec3 eyePos = owner.getEyePosition();
+            // Both copies receive a fresh camera direction before simulating this tick.
             Vec3 look = CameraAimHelper.resolve(owner);
 
             Vec3 targetPos = eyePos.add(look.scale(this.getParkedDistance()));
@@ -866,6 +871,7 @@ public class KiBlastEntity extends AbstractKiProjectile {
 
             this.setYRot(CameraAimHelper.yaw(look));
             this.setXRot(CameraAimHelper.pitch(look));
+            if (!this.level().isClientSide) this.hasImpulse = true;
         }
 
         if (!this.level().isClientSide) {
@@ -1008,9 +1014,49 @@ public class KiBlastEntity extends AbstractKiProjectile {
     public boolean isFiring() { return this.entityData.get(IS_FIRING); }
     public void setFiring(boolean firing) { this.entityData.set(IS_FIRING, firing); }
 
+    public boolean isActivelyControlledSokidan() {
+        return this.isFiring() && this.isParked() && this.isControllable();
+    }
 
+    private boolean isLocallyPredictedSokidan() {
+        return this.level().isClientSide && this.isActivelyControlledSokidan()
+                && this.getOwner() instanceof Player player && player.isLocalPlayer();
+    }
+
+    /**
+     * The controlling client predicts its own parked Sokidan from immediate local camera aim. DMZ's
+     * ten-tick entity tracking interval would otherwise snap that prediction back to the delayed
+     * server path. Other clients accept the authoritative update forced for active control ticks.
+     */
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps) {
+        if (!this.isLocallyPredictedSokidan()) super.lerpTo(x, y, z, yRot, xRot, steps);
+    }
+
+    @Override
+    public void lerpMotion(double x, double y, double z) {
+        if (!this.isLocallyPredictedSokidan()) super.lerpMotion(x, y, z);
+    }
+
+    @Override
+    public void onSyncedDataUpdated(net.minecraft.network.syncher.EntityDataAccessor<?> key) {
+        super.onSyncedDataUpdated(key);
+        if (IS_PARKED.equals(key) && this.level().isClientSide && this.isControllable()
+                && this.getOwner() instanceof Player player && player.isLocalPlayer()) {
+            CameraAimHelper.trackLocalSokidan(this.getId(), this.isActivelyControlledSokidan());
+            this.setDeltaMovement(this.isParked() ? Vec3.ZERO : CameraAimHelper.resolve(player).scale(this.getKiSpeed()));
+        }
+    }
+
+
+    /**
+     * Holds a charging blast in position relative to its owner.
+     *
+     * <p>Called every tick from {@link #tick()} on both sides, so it uses entity rotation rather
+     * than {@code CameraAimHelper}'s server-only persistent data.
+     */
     private void updatePositionRelativeToOwner(LivingEntity owner) {
-        Vec3 look = CameraAimHelper.resolve(owner);
+        Vec3 look = owner.getLookAngle();
         Vec3 worldUp = new Vec3(0, 1, 0);
         Vec3 right = look.cross(worldUp).normalize();
         if (right.lengthSqr() < 1.0E-6D) {
@@ -1029,8 +1075,8 @@ public class KiBlastEntity extends AbstractKiProjectile {
         Vec3 newPos = new Vec3(centerX, centerY, centerZ).add(offset);
         this.setPos(newPos.x, newPos.y, newPos.z);
 
-        this.setYRot(CameraAimHelper.yaw(look));
-        this.setXRot(CameraAimHelper.pitch(look));
+        this.setYRot(owner.getYRot());
+        this.setXRot(owner.getXRot());
     }
 
     private void pulseAreaDamage() {

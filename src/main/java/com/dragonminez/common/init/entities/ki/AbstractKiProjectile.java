@@ -759,14 +759,6 @@ public abstract class AbstractKiProjectile extends Projectile {
 		}
 	}
 
-	@Override
-	public void onSyncedDataUpdated(List<SynchedEntityData.DataValue<?>> pDataValues) {
-		super.onSyncedDataUpdated(pDataValues);
-		if (SIZE.equals(pDataValues)) {
-			this.refreshDimensions();
-		}
-	}
-
 	@java.lang.SuppressWarnings("all")
 	public float getClashLockedLength() {
 		return this.clashLockedLength;

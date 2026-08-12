@@ -18,6 +18,9 @@ updateJSONURL="https://raw.githubusercontent.com/DragonMineZ/dragonminez/main/up
 [[mixins]]
 config="dragonminez.mixins.json"
 
+[[mixins]]
+config="dragonminez.sable.mixins.json"
+
 [[dependencies.${mod_id}]]
     modId="neoforge"
     type="required"

@@ -4,6 +4,8 @@ package com.dragonminez.client.render.camera;
 import com.dragonminez.client.events.LockOnEvent;
 import com.dragonminez.common.config.ConfigManager;
 import com.dragonminez.common.config.GeneralUserConfig;
+import com.dragonminez.common.stats.StatsCapability;
+import com.dragonminez.common.stats.StatsProvider;
 import net.minecraft.client.Camera;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -47,21 +49,22 @@ public final class OverShoulderCamera {
 	}
 
 	public static Vec3 computeMove(Camera camera, BlockGetter level, Entity entity, boolean thirdPersonReverse, double vanillaForward, double vanillaUp, double vanillaLeft, float partialTick) {
+		double formScale = cameraScale(entity);
 		if (!isActive(entity, thirdPersonReverse)) {
 			active = false;
-			return new Vec3(vanillaForward, vanillaUp, vanillaLeft);
+			return new Vec3(vanillaForward * formScale, vanillaUp, vanillaLeft);
 		}
 		if (!active) {
-			curBack = -vanillaForward;
+			curBack = -vanillaForward * formScale;
 			curUp = 0.0;
 			curRight = 0.0;
 			active = true;
 		}
 		GeneralUserConfig config = ConfigManager.getUserConfig();
 		double ease = config.getOverShoulderSmoothing();
-		double targetBack = config.getOverShoulderBack();
-		double targetUp = config.getOverShoulderUp();
-		double targetRight = config.getOverShoulderSide() * (config.getOverShoulderLeft() ? -1.0 : 1.0);
+		double targetBack = config.getOverShoulderBack() * formScale;
+		double targetUp = config.getOverShoulderUp() * formScale;
+		double targetRight = config.getOverShoulderSide() * formScale * (config.getOverShoulderLeft() ? -1.0 : 1.0);
 		curBack += (targetBack - curBack) * ease;
 		curUp += (targetUp - curUp) * ease;
 		curRight += (targetRight - curRight) * ease;
@@ -77,6 +80,17 @@ public final class OverShoulderCamera {
 			moveLeft *= scale;
 		}
 		return new Vec3(moveForward, moveUp, moveLeft);
+	}
+
+	private static double cameraScale(Entity entity) {
+		if (!(entity instanceof Player player)) return 1.0;
+		return StatsProvider.get(StatsCapability.INSTANCE, player).map(stats -> {
+			Float[] scale = stats.getCharacter().getResolvedModelScaling();
+			if (scale == null || scale.length < 3) return 1.0;
+			double largest = 1.0;
+			for (int i = 0; i < 3; i++) if (scale[i] != null && Float.isFinite(scale[i])) largest = Math.max(largest, scale[i]);
+			return largest;
+		}).orElse(1.0);
 	}
 
 	private static double clampToObstruction(Camera camera, BlockGetter level, Entity entity, double moveForward, double moveUp, double moveLeft, float partialTick) {

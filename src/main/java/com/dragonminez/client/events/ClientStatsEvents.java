@@ -363,7 +363,9 @@ public class ClientStatsEvents {
 			boolean isFlying = data.getSkills().isSkillActive("fly") && !localPlayer.onGround() && !localPlayer.isInWater();
 
 			if (isFlying) {
-				if (flightSound == null || !mc.getSoundManager().isActive(flightSound)) {
+				// A newly queued sound is not active yet; testing isActive() here allocated another
+				// looping instance every tick until OpenAL's source pool was exhausted.
+				if (flightSound == null || flightSound.isStopped()) {
 					flightSound = new FlightSoundInstance(localPlayer);
 					mc.getSoundManager().play(flightSound);
 				}

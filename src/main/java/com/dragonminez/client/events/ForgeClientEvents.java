@@ -16,6 +16,7 @@ import com.dragonminez.client.util.KeyBinds;
 import com.dragonminez.client.gui.character.CharacterStatsScreen;
 import com.dragonminez.common.combat.logic.player.PlayerAttackHelper;
 import com.dragonminez.common.combat.util.Minecraft_DMZ;
+import com.dragonminez.common.compat.CameraAimHelper;
 import com.dragonminez.common.config.ConfigManager;
 import com.dragonminez.common.init.MainSounds;
 import com.dragonminez.common.init.entities.SpacePodEntity;
@@ -31,6 +32,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
@@ -70,11 +72,13 @@ public class ForgeClientEvents {
 		// Fired when the local player entity is rebuilt: respawn after death and dimension change.
 		// Lets the quest tree's "Start" button be clickable again without waiting out the cooldown.
 		QuestTreeScreen.clearResummonCooldowns();
+		CameraAimHelper.clearLocalSokidans();
 	}
 
 	@SubscribeEvent
 	public static void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
 		TextureCounter.clearCache();
+		CameraAimHelper.clearLocalSokidans();
 		if (Minecraft.getInstance().player == null) return;
 		StatsProvider.get(StatsCapability.INSTANCE, Minecraft.getInstance().player).ifPresent(data -> {
 			isHasCreatedCharacterCache = data.getStatus().isHasCreatedCharacter();
@@ -117,7 +121,9 @@ public class ForgeClientEvents {
 		}
 
         while (KeyBinds.SECOND_FUNCTION_KEY.consumeClick()) {
-            NetworkHandler.sendToServer(new SokidanControlC2S());
+			Vec3 aim = cameraAim(mc);
+			CameraAimHelper.store(mc.player, aim);
+			NetworkHandler.sendToServer(SokidanControlC2S.toggle(aim));
         }
 	}
 
@@ -171,11 +177,23 @@ public class ForgeClientEvents {
 	}
 
 	@SubscribeEvent
+	public static void onClientTick(ClientTickEvent.Pre event) {
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player == null || mc.level == null || !CameraAimHelper.hasLocalSokidan(mc.level)) return;
+		Vec3 aim = cameraAim(mc);
+		CameraAimHelper.store(mc.player, aim);
+		NetworkHandler.sendToServer(SokidanControlC2S.aim(aim));
+	}
+
+	@SubscribeEvent
 	public static void onClientTick(ClientTickEvent.Post event) {
 
 		Minecraft mc = Minecraft.getInstance();
 		TransformationPostShaderManager.tick();
-		if (mc.player == null || mc.level == null) return;
+		if (mc.player == null || mc.level == null) {
+			CameraAimHelper.clearLocalSokidans();
+			return;
+		}
 		if (characterCreationOpenCooldownTicks > 0) characterCreationOpenCooldownTicks--;
 		handleUtilityMenuHold(mc);
 
@@ -225,6 +243,11 @@ public class ForgeClientEvents {
 		}
 	}
 
+	private static Vec3 cameraAim(Minecraft mc) {
+		var look = mc.gameRenderer.getMainCamera().getLookVector();
+		return new Vec3(look.x(), look.y(), look.z());
+	}
+
 	private static void handleUtilityMenuHold(Minecraft mc) {
 		boolean utilityHeld = isUtilityMenuKeyHeld(mc);
 
@@ -267,6 +290,7 @@ public class ForgeClientEvents {
 
 	@SubscribeEvent
 	public static void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
+		CameraAimHelper.clearLocalSokidans();
 		ConfigManager.clearServerSync();
 		DMZRendererCache.clear();
 		TextureCounter.clearCache();
