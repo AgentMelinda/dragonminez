@@ -1,6 +1,7 @@
 package com.dragonminez.client.render.firstperson;
 
 import com.dragonminez.client.render.DMZPlayerRenderer;
+import com.dragonminez.client.render.EntityPreviewRenderContext;
 import com.dragonminez.client.render.firstperson.dto.DMZCameraBuffer;
 import com.dragonminez.client.render.firstperson.dto.FirstPersonManager;
 import com.dragonminez.client.util.BoneVisibilityHandler;
@@ -70,7 +71,11 @@ public class DMZPOVPlayerRenderer<T extends AbstractClientPlayer & GeoAnimatable
         boolean originallyHidden = bone.isHidden();
         boolean isLocalPlayer = (animatable == Minecraft.getInstance().player);
 
-        if (isLocalPlayer && bone.getName().equals("head") && FirstPersonManager.shouldRenderFirstPerson(animatable)) bone.setHidden(true);
+        // Hiding the head is right when the camera is inside it, but wrong for a character
+        // preview. DMZHairLayer already makes that distinction; this rule needs to as well.
+        if (isLocalPlayer && bone.getName().equals("head")
+                && FirstPersonManager.shouldRenderFirstPerson(animatable)
+                && !EntityPreviewRenderContext.isRendering()) bone.setHidden(true);
         super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
         bone.setHidden(originallyHidden);
     }

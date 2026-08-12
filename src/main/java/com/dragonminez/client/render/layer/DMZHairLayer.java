@@ -88,8 +88,13 @@ public class DMZHairLayer<T extends AbstractClientPlayer & GeoAnimatable> extend
 		// DMZ replaces PlayerRenderer at HEAD, so Aero Cam Sync's own callback is not guaranteed
 		// to be active by the time GeckoLib renders this layer. Its presence is the stable compat
 		// signal: keep the complete DMZ model and let Aero Cam Sync position the camera around it.
+		// Same preview escape as the check above. A menu preview never reaches this branch
+		// (shouldRenderFirstPerson is false whenever a screen is open), but an in-world preview
+		// such as a HUD portrait does, and hiding its hair is exactly what the context exists
+		// to prevent.
 		if (FirstPersonManager.shouldRenderFirstPerson(animatable)
-				&& !AeroCamSyncCompat.isLoaded()) return;
+				&& !AeroCamSyncCompat.isLoaded()
+				&& !EntityPreviewRenderContext.isRendering()) return;
 
 		ItemStack headItem = resolveHeadArmorStack(animatable);
 		if (!headItem.isEmpty()) {
