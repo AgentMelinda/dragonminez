@@ -2,7 +2,6 @@ package com.dragonminez.client.events;
 
 import com.dragonminez.Reference;
 import com.dragonminez.client.render.effects.AuraRenderer;
-import com.dragonminez.client.render.effects.KiWeaponRenderer;
 import com.dragonminez.client.render.shader.DMZShaders;
 import com.dragonminez.client.render.shader.KiBloomRenderer;
 import com.dragonminez.client.render.shader.TransformationPostShaderManager;
@@ -37,7 +36,6 @@ public class PlayerEffectsRenderHandler {
 		{
 			PlayerEffectQueue.getAndClearAuras();
 			PlayerEffectQueue.getAndClearSparks();
-			PlayerEffectQueue.getAndClearWeapons();
 			PlayerEffectQueue.getAndClearFirstPersonAuras();
 			PlayerEffectQueue.getAndClearKiAttacks();
 			PlayerEffectQueue.getAndClearEntityEffects();
@@ -57,7 +55,6 @@ public class PlayerEffectsRenderHandler {
 			if (stage == RenderLevelStageEvent.Stage.AFTER_SKY) {
 				PlayerEffectQueue.getAndClearAuras();
 				PlayerEffectQueue.getAndClearSparks();
-				PlayerEffectQueue.getAndClearWeapons();
 				PlayerEffectQueue.getAndClearFirstPersonAuras();
 				PlayerEffectQueue.getAndClearKiAttacks();
 				PlayerEffectQueue.getAndClearEntityEffects();
@@ -66,29 +63,19 @@ public class PlayerEffectsRenderHandler {
 			} else if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
 				TransformationPostShaderManager.setShaderpackMainPass(false);
 				mc.getMainRenderTarget().bindWrite(false);
-				renderWeapons(mc, event);
 				renderEffects(mc, event);
 				TransformationPostShaderManager.processShaderpackOutline(event.getPartialTick().getGameTimeDeltaPartialTick(false));
 			}
 			return;
 		}
 
-		if (stage == RenderLevelStageEvent.Stage.AFTER_PARTICLES) {
-			renderWeapons(mc, event);
-		} else if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+		if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
 			// 1.21 composites the particles/weather/fabulous targets after their
 			// stage callbacks. Drawing DMZ effects there makes terrain and water
 			// overwrite them. Draw once into the final main target instead.
 			mc.getMainRenderTarget().bindWrite(false);
 			renderEffects(mc, event);
 		}
-	}
-
-	private static void renderWeapons(Minecraft mc, RenderLevelStageEvent event) {
-		MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
-		PoseStack poseStack = createDeferredEffectPose(event);
-		KiWeaponRenderer.processWeapons(buffers, poseStack);
-		buffers.endBatch();
 	}
 
 	private static void renderEffects(Minecraft mc, RenderLevelStageEvent event) {
